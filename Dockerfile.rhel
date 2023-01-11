@@ -4,14 +4,8 @@ WORKDIR /build/
 
 # Expecting kernel version as an input to the build
 ARG KVER
-ARG ORG_ID
-ARG ACTIVATIONKEY
 
-RUN rm -rf /etc/rhsm-host
-
-RUN subscription-manager register --org=${ORG_ID} --activationkey=${ACTIVATIONKEY}
-RUN subscription-manager release --set=8.4
-RUN dnf install -y --enablerepo=rhel-8-for-x86_64-baseos-eus-rpms kernel-headers-${KVER} kernel-devel-${KVER} kernel-modules-${KVER}
+RUN dnf install -y kernel-headers-${KVER} kernel-devel-${KVER} kernel-modules-${KVER}
 RUN dnf install -y make sudo git vim gcc
 RUN dnf install -y --enablerepo=codeready-builder-for-rhel-8-x86_64-rpms meson ninja-build
 RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
