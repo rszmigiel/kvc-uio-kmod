@@ -60,6 +60,8 @@ build_kmod_container() {
         --label="name=${KVC_SOFTWARE_NAME}"          \
         --build-arg KVER=${KVC_KVER}                 \
         --build-arg KMODVER=${KMOD_SOFTWARE_VERSION} \
+        --build-arg ORG_ID=${RH_ORG_ID}              \
+        --build-arg ACTIVATIONKEY=${RH_ACTIVATIONKEY} \
         ${KMOD_CONTAINER_BUILD_CONTEXT}
 
     # get rid of any dangling containers if they exist
