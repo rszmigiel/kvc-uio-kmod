@@ -5,7 +5,7 @@ WORKDIR /build/
 # Expecting kernel version as an input to the build
 ARG KVER
 
-RUN dnf install -y kernel-headers-${KVER} kernel-devel-${KVER} kernel-modules-${KVER}
+RUN dnf install -y --enablerepo=rhel-8-for-x86_64-baseos-eus-rpms kernel-headers-${KVER} kernel-devel-${KVER} kernel-modules-${KVER}
 RUN dnf install -y make sudo git vim gcc
 RUN dnf install -y --enablerepo=codeready-builder-for-rhel-8-x86_64-rpms meson ninja-build
 RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
