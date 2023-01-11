@@ -1,25 +1,39 @@
-FROM registry.access.redhat.com/ubi8:latest
-MAINTAINER "coreos@lists.fedoraproject.org"
+FROM registry.access.redhat.com/ubi8:8.4
+MAINTAINER "rafal@redhat.com"
 WORKDIR /build/
-
-# First update the base container to latest versions of everything
-RUN yum update -y
-
-# Expecting kmod software version as an input to the build
-ARG KMODVER
-# Grab the software from upstream
-ADD https://github.com/kmods-via-containers/simple-kmod/archive/${KMODVER}.tar.gz ./file.tar.gz
-RUN tar -x --strip-components=1 -f ./file.tar.gz
 
 # Expecting kernel version as an input to the build
 ARG KVER
+ARG ORG_ID
+ARG ACTIVATIONKEY
 
-# Note, your host must have access to repos where kernel developement
-# packages can be installed. If it doesn't the following steps will
-# fail
+RUN rm -rf /etc/rhsm-host
 
-# Prep and build the module
-RUN yum install -y make sudo
-RUN make buildprep KVER=${KVER} KMODVER=${KMODVER}
-RUN make all       KVER=${KVER} KMODVER=${KMODVER}
-RUN make install   KVER=${KVER} KMODVER=${KMODVER}
+RUN subscription-manager register --org=${ORG_ID} --activationkey=${ACTIVATIONKEY}
+RUN subscription-manager release --set=8.4
+RUN dnf install -y --enablerepo=rhel-8-for-x86_64-baseos-eus-rpms kernel-headers-${KVER} kernel-devel-${KVER} kernel-modules-${KVER}
+RUN dnf install -y make sudo git vim gcc
+RUN dnf install -y --enablerepo=codeready-builder-for-rhel-8-x86_64-rpms meson ninja-build
+RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+RUN dnf install -y python3-pyelftools elfutils-libelf-devel
+
+RUN git clone http://dpdk.org/git/dpdk
+RUN git clone http://dpdk.org/git/dpdk-kmods
+RUN sed -i -e 's/flow_classify,kni/flow_classify/g' dpdk/meson_options.txt
+
+WORKDIR dpdk
+RUN meson build -Denable_kmods=true -Dkernel_dir=/usr/src/kernels/${KVER} -Ddisable_libs="kvargs,telemetry,eal,ring,rcu,mempool,mbuf,net,meter,ethdev,pci,cmdline,metrics,hash,timer,acl,bbdev,bitratestats,bpf,cfgfile,compressdev,cryptodev,distributor,efd,eventdev,gpudev,gro,gso,ip_frag,jobstats,latencystats,lpm,member,pcapng,power,rawdev,regexdev,dmadev,rib,reorder,sched,security,stack,vhost,ipsec,fib,port,pdump,table,pipeline,graph,node" -Ddisable_apps="proc-info,test-acl,test-bbdev,test-cmdline,test-compress-perf,test-crypto-perf,test-eventdev,test-fib,test-flow-perf,test-pmd,test-regex,test-sad,test-security-perf" -Ddisable_drivers="common/cpt,common/dpaax,common/iavf,common/idpf,common/octeontx,common/cnxk,common/qat,common/sfc_efx,bus/auxiliary,bus/dpaa,bus/fslmc,bus/ifpga,bus/pci,bus/vdev,bus/vmbus,mempool/bucket,mempool/cnxk,mempool/dpaa,mempool/dpaa2,mempool/octeontx,mempool/ring,mempool/stack,dma/cnxk,dma/dpaa,dma/dpaa2,dma/hisilicon,dma/idxd,dma/ioat,dma/skeleton,net/af_packet,net/ark,net/atlantic,net/avp,net/axgbe,net/bnxt,net/bond,net/cnxk,net/cxgbe,net/dpaa,net/dpaa2,net/e1000,net/ena,net/enetc,net/enetfec,net/enic,net/failsafe,net/fm10k,net/gve,net/hinic,net/hns3,net/i40e,net/iavf,net/ice,net/idpf,net/igc,net/ionic,net/ixgbe,net/liquidio,net/memif,net/netvsc,net/nfp,net/ngbe,net/null,net/octeontx,net/octeon_ep,net/pfe,net/qede,net/ring,net/thunderx,net/txgbe,net/vdev_netvsc,net/virtio,net/vmxnet3,raw/cnxk_bphy,raw/cnxk_gpio,raw/dpaa2_cmdif,raw/ntb,raw/skeleton,crypto/bcmfs,crypto/caam_jr,crypto/cnxk,crypto/dpaa_sec,crypto/dpaa2_sec,crypto/nitrox,crypto/null,crypto/octeontx,crypto/scheduler,crypto/virtio,compress/octeontx,regex/cn9k,event/cnxk,event/dlb2,event/dpaa,event/dpaa2,event/dsw,event/opdl,event/skeleton,event/sw,event/octeontx,baseband/acc,baseband/fpga_5gnr_fec,baseband/fpga_lte_fec,baseband/la12xx,baseband/null,baseband/turbo_sw"
+
+WORKDIR build
+RUN ninja
+RUN ninja install
+
+WORKDIR /build/dpdk-kmods/linux/igb_uio
+RUN make
+
+WORKDIR /lib/modules/${KVER}/
+RUN cp extra/dpdk/rte_kni.ko .
+RUN cp /build/dpdk-kmods/linux/igb_uio/igb_uio.ko .
+RUN depmod
+
+CMD ["/usr/bin/sleep","infinity"]
